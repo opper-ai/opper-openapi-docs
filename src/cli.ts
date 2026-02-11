@@ -38,6 +38,21 @@ program
   });
 
 program
+  .command("render")
+  .description("Render static site from existing markdown (no regeneration)")
+  .option("--dir <dir>", "Docs directory containing markdown files", "./docs")
+  .action(async (options) => {
+    try {
+      await renderSite(resolve(options.dir));
+    } catch (err) {
+      console.error(
+        `Error: ${err instanceof Error ? err.message : String(err)}`
+      );
+      process.exit(1);
+    }
+  });
+
+program
   .command("serve")
   .description("Serve the generated static site locally")
   .option("--dir <dir>", "Docs directory containing _site", "./docs")

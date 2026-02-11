@@ -2,12 +2,19 @@ import { readFile, writeFile, mkdir } from "fs/promises";
 import { resolve, join, dirname } from "path";
 import { Marked } from "marked";
 import { createHighlighter } from "shiki";
-import type { Manifest, SectionManifest } from "./manifest.js";
+import type { Manifest } from "./manifest.js";
+
+interface Heading {
+  level: number;
+  text: string;
+  slug: string;
+}
 
 interface NavItem {
   title: string;
   href: string;
   active?: boolean;
+  toc?: Heading[];
 }
 
 interface NavGroup {
@@ -19,6 +26,30 @@ type NavEntry = NavItem | NavGroup;
 
 function isGroup(entry: NavEntry): entry is NavGroup {
   return "items" in entry;
+}
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim();
+}
+
+function extractHeadings(markdown: string): Heading[] {
+  const headings: Heading[] = [];
+  // Match ## and ### headings (not # which is the page title)
+  const regex = /^(#{2,3})\s+(.+)$/gm;
+  let match;
+  while ((match = regex.exec(markdown)) !== null) {
+    headings.push({
+      level: match[1].length,
+      text: match[2].replace(/`/g, ""),
+      slug: slugify(match[2]),
+    });
+  }
+  return headings;
 }
 
 export async function renderSite(docsDir: string): Promise<string> {
@@ -33,7 +64,7 @@ export async function renderSite(docsDir: string): Promise<string> {
     .map(([id, sec]) => ({ id, ...sec }))
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-  // Set up markdown renderer with shiki
+  // Set up markdown renderer with shiki + heading IDs
   const highlighter = await createHighlighter({
     themes: ["github-light"],
     langs: [
@@ -51,6 +82,10 @@ export async function renderSite(docsDir: string): Promise<string> {
 
   const marked = new Marked({
     renderer: {
+      heading({ text, depth }) {
+        const slug = slugify(text.replace(/<[^>]*>/g, ""));
+        return `<h${depth} id="${slug}">${text}</h${depth}>\n`;
+      },
       code({ text, lang }) {
         const language = lang || "text";
         try {
@@ -65,25 +100,35 @@ export async function renderSite(docsDir: string): Promise<string> {
     },
   });
 
-  // Render each section
+  // First pass: read all markdown and extract headings per section
+  const sectionData = new Map<
+    string,
+    { mdContent: string; headings: Heading[]; title: string; htmlPath: string }
+  >();
+
   for (const section of sections) {
     const mdPath = resolve(join(docsDir, section.outputPath));
     const mdContent = await readFile(mdPath, "utf-8");
-    const htmlContent = await marked.parse(mdContent);
-
-    // Extract title from first H1
+    const headings = extractHeadings(mdContent);
     const titleMatch = mdContent.match(/^#\s+(.+)$/m);
     const title = titleMatch ? titleMatch[1] : section.id;
-
     const htmlPath = section.outputPath.replace(/\.md$/, ".html");
-    const nav = buildNav(sections, htmlPath);
+    sectionData.set(section.id, { mdContent, headings, title, htmlPath });
+  }
 
-    const depth = htmlPath.split("/").length - 1;
+  // Render each section
+  for (const section of sections) {
+    const data = sectionData.get(section.id)!;
+    const htmlContent = await marked.parse(data.mdContent);
+
+    const nav = buildNav(sections, data.htmlPath, sectionData);
+
+    const depth = data.htmlPath.split("/").length - 1;
     const rootPath = depth > 0 ? "../".repeat(depth) : "./";
 
-    const fullHtml = template(title, htmlContent, nav, rootPath);
+    const fullHtml = template(data.title, htmlContent, nav, rootPath);
 
-    const outPath = resolve(join(siteDir, htmlPath));
+    const outPath = resolve(join(siteDir, data.htmlPath));
     await mkdir(dirname(outPath), { recursive: true });
     await writeFile(outPath, fullHtml);
   }
@@ -98,18 +143,29 @@ export async function renderSite(docsDir: string): Promise<string> {
 }
 
 function buildNav(
-  sections: Array<{ id: string; outputPath: string; title: string; group?: string }>,
-  currentPath: string
+  sections: Array<{
+    id: string;
+    outputPath: string;
+    title: string;
+    group?: string;
+  }>,
+  currentPath: string,
+  sectionData: Map<
+    string,
+    { headings: Heading[]; htmlPath: string }
+  >
 ): NavEntry[] {
   const entries: NavEntry[] = [];
   const groups = new Map<string, NavItem[]>();
 
   for (const sec of sections) {
-    const href = sec.outputPath.replace(/\.md$/, ".html");
+    const data = sectionData.get(sec.id)!;
+    const isActive = data.htmlPath === currentPath;
     const item: NavItem = {
       title: sec.title,
-      href,
-      active: href === currentPath,
+      href: data.htmlPath,
+      active: isActive,
+      toc: isActive ? data.headings : undefined,
     };
 
     if (sec.group) {
@@ -117,7 +173,6 @@ function buildNav(
       if (!group) {
         group = [];
         groups.set(sec.group, group);
-        // Insert a group placeholder at this position
         entries.push({ label: sec.group, items: group });
       }
       group.push(item);
@@ -129,15 +184,31 @@ function buildNav(
   return entries;
 }
 
+function renderToc(headings: Heading[]): string {
+  return headings
+    .map((h) => {
+      const indent = h.level === 3 ? " toc-h3" : "";
+      return `<li class="toc-item${indent}"><a href="#${h.slug}">${escapeHtml(h.text)}</a></li>`;
+    })
+    .join("\n              ");
+}
+
+function renderNavItem(item: NavItem, rootPath: string): string {
+  const cls = item.active ? ' class="active"' : "";
+  let html = `<li${cls}><a href="${rootPath}${item.href}">${escapeHtml(item.title)}</a>`;
+  if (item.toc && item.toc.length > 0) {
+    html += `\n            <ul class="toc">\n              ${renderToc(item.toc)}\n            </ul>`;
+  }
+  html += `</li>`;
+  return html;
+}
+
 function renderNav(entries: NavEntry[], rootPath: string): string {
   return entries
     .map((entry) => {
       if (isGroup(entry)) {
         const items = entry.items
-          .map((item) => {
-            const cls = item.active ? ' class="active"' : "";
-            return `<li${cls}><a href="${rootPath}${item.href}">${escapeHtml(item.title)}</a></li>`;
-          })
+          .map((item) => renderNavItem(item, rootPath))
           .join("\n            ");
         return `<li class="nav-group">
           <span class="nav-group-label">${escapeHtml(entry.label)}</span>
@@ -146,8 +217,7 @@ function renderNav(entries: NavEntry[], rootPath: string): string {
           </ul>
         </li>`;
       }
-      const cls = entry.active ? ' class="active"' : "";
-      return `<li${cls}><a href="${rootPath}${entry.href}">${escapeHtml(entry.title)}</a></li>`;
+      return renderNavItem(entry, rootPath);
     })
     .join("\n          ");
 }
@@ -207,6 +277,7 @@ const CSS = `/* opper-openapi-docs */
   --color-text: #24292e;
   --color-text-secondary: #586069;
   --color-text-muted: #8b949e;
+  --color-toc-bg: #f0f4f8;
   --color-link: #0366d6;
   --color-active: #0366d6;
   --color-active-bg: #f0f4ff;
@@ -273,7 +344,7 @@ body {
   background: var(--color-active-bg);
 }
 
-.sidebar li.active a {
+.sidebar li.active > a {
   color: var(--color-active);
   border-left-color: var(--color-active);
   background: var(--color-active-bg);
@@ -295,12 +366,44 @@ body {
   color: var(--color-text-muted);
 }
 
-.nav-group ul {
+.nav-group > ul {
   list-style: none;
 }
 
 .nav-group li a {
   padding-left: 1.25rem;
+}
+
+/* Table of contents (on-page headings) */
+.toc {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0.25rem 0;
+}
+
+.toc-item a {
+  padding: 0.15rem 1rem 0.15rem 1.5rem !important;
+  font-size: 0.8rem !important;
+  color: var(--color-text-muted) !important;
+  border-left-color: transparent !important;
+  font-weight: 400 !important;
+}
+
+.toc {
+  background: var(--color-toc-bg);
+  border-radius: 0;
+  margin: 0 0 0.25rem 0;
+  padding: 0.4rem 0 !important;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.toc-item.toc-h3 a {
+  padding-left: 2rem !important;
+}
+
+.toc-item a:hover {
+  color: var(--color-text-secondary) !important;
+  background: none !important;
 }
 
 /* Content */
@@ -385,6 +488,8 @@ article .shiki {
   font-size: 0.85rem;
   line-height: 1.5;
   overflow-x: auto;
+  background: var(--color-code-bg) !important;
+  border: 1px solid var(--color-border);
 }
 
 /* Tables */
@@ -433,11 +538,15 @@ article blockquote {
     gap: 0;
   }
 
+  .toc {
+    display: none;
+  }
+
   .nav-group {
     margin-top: 0;
   }
 
-  .nav-group ul {
+  .nav-group > ul {
     display: flex;
     flex-wrap: wrap;
   }
@@ -448,7 +557,7 @@ article blockquote {
     padding: 0.5rem 0.75rem;
   }
 
-  .sidebar li.active a {
+  .sidebar li.active > a {
     border-left: none;
     border-bottom-color: var(--color-active);
   }

@@ -58,7 +58,7 @@ beforeAll(async () => {
 
   await writeFile(join(TEST_DIR, "index.md"), "# Overview\n\nWelcome.\n\n```bash\ncurl https://api.example.com\n```\n");
   await writeFile(join(TEST_DIR, "authentication.md"), "# Authentication\n\nUse Bearer tokens.\n");
-  await writeFile(join(TEST_DIR, "endpoints/pets.md"), "# Pets\n\n`GET /pets`\n");
+  await writeFile(join(TEST_DIR, "endpoints/pets.md"), "# Pets\n\n## List Pets\n\n`GET /pets`\n\n## Create Pet\n\n`POST /pets`\n\n### Request Body\n\nJSON body.\n");
   await writeFile(join(TEST_DIR, "endpoints/stores.md"), "# Stores\n\n`GET /stores`\n");
   await writeFile(join(TEST_DIR, "endpoints/chat.md"), "# Chat\n\n`POST /chat`\n");
 });
@@ -126,5 +126,41 @@ describe("renderSite", () => {
 
     expect(petsHtml).toContain("../style.css");
     expect(petsHtml).toContain("../index.html");
+  });
+
+  it("shows page headings as TOC under active nav item", async () => {
+    const siteDir = await renderSite(TEST_DIR);
+    const petsHtml = await readFile(join(siteDir, "endpoints/pets.html"), "utf-8");
+
+    // Active page should have a TOC with h2/h3 headings
+    expect(petsHtml).toContain('class="toc"');
+    expect(petsHtml).toContain("#list-pets");
+    expect(petsHtml).toContain("#create-pet");
+    expect(petsHtml).toContain("#request-body");
+  });
+
+  it("adds id attributes to headings for anchor links", async () => {
+    const siteDir = await renderSite(TEST_DIR);
+    const petsHtml = await readFile(join(siteDir, "endpoints/pets.html"), "utf-8");
+
+    expect(petsHtml).toContain('id="list-pets"');
+    expect(petsHtml).toContain('id="create-pet"');
+    expect(petsHtml).toContain('id="request-body"');
+  });
+
+  it("indents h3 headings in TOC", async () => {
+    const siteDir = await renderSite(TEST_DIR);
+    const petsHtml = await readFile(join(siteDir, "endpoints/pets.html"), "utf-8");
+
+    // h3 headings should have the toc-h3 class
+    expect(petsHtml).toContain('toc-h3');
+  });
+
+  it("does not show TOC on non-active pages", async () => {
+    const siteDir = await renderSite(TEST_DIR);
+    const indexHtml = await readFile(join(siteDir, "index.html"), "utf-8");
+
+    // The index page should not show the pets TOC
+    expect(indexHtml).not.toContain("#list-pets");
   });
 });
