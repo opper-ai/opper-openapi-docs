@@ -1,0 +1,79 @@
+name: 'Opper OpenAPI Docs'
+description: 'Generate API docs from OpenAPI spec using AI agents'
+
+inputs:
+  spec:
+    description: 'Path to OpenAPI spec file'
+    required: true
+  output:
+    description: 'Output directory'
+    default: './docs'
+  instructions:
+    description: 'Custom documentation instructions'
+  model:
+    description: 'LLM model to use'
+  site:
+    description: 'Generate static site'
+    default: 'true'
+  opper-api-key:
+    description: 'Opper API key'
+    required: true
+
+outputs:
+  docs-dir:
+    description: 'Path to generated markdown'
+    value: ${{ steps.run.outputs.docs-dir }}
+  site-dir:
+    description: 'Path to generated static site (if site: true)'
+    value: ${{ steps.run.outputs.site-dir }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      shell: bash
+      run: npm ci
+      working-directory: ${{ github.action_path }}
+
+    - name: Build
+      shell: bash
+      run: npm run build
+      working-directory: ${{ github.action_path }}
+
+    - name: Generate docs
+      id: run
+      shell: bash
+      env:
+        OPPER_API_KEY: ${{ inputs.opper-api-key }}
+        INPUT_SPEC: ${{ inputs.spec }}
+        INPUT_OUTPUT: ${{ inputs.output }}
+        INPUT_INSTRUCTIONS: ${{ inputs.instructions }}
+        INPUT_MODEL: ${{ inputs.model }}
+        INPUT_SITE: ${{ inputs.site }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        ARGS=(--spec "$INPUT_SPEC" --output "$INPUT_OUTPUT")
+
+        if [ -n "$INPUT_INSTRUCTIONS" ]; then
+          ARGS+=(--instructions "$INPUT_INSTRUCTIONS")
+        fi
+
+        if [ -n "$INPUT_MODEL" ]; then
+          ARGS+=(--model "$INPUT_MODEL")
+        fi
+
+        if [ "$INPUT_SITE" = "true" ]; then
+          ARGS+=(--site)
+        fi
+
+        node "$ACTION_PATH/dist/cli.js" generate "${ARGS[@]}"
+
+        echo "docs-dir=$INPUT_OUTPUT" >> "$GITHUB_OUTPUT"
+        if [ "$INPUT_SITE" = "true" ]; then
+          echo "site-dir=${INPUT_OUTPUT}/_site" >> "$GITHUB_OUTPUT"
+        fi
