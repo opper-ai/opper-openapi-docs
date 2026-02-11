@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -21,3 +24,65 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+  release:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version bump
+        id: bump
+        run: |
+          LATEST_TAG=$(git tag -l 'v*.*.*' --sort=-v:refname | head -n1)
+
+          if [ -z "$LATEST_TAG" ]; then
+            echo "version=v1.0.0" >> "$GITHUB_OUTPUT"
+            echo "major=v1" >> "$GITHUB_OUTPUT"
+            echo "No previous tag found, starting at v1.0.0"
+            exit 0
+          fi
+
+          echo "Latest tag: $LATEST_TAG"
+          COMMITS=$(git log "${LATEST_TAG}..HEAD" --pretty=format:"%s")
+
+          BUMP="patch"
+          while IFS= read -r msg; do
+            if echo "$msg" | grep -qiE 'BREAKING CHANGE|^[a-z]+(\(.+\))?!:'; then
+              BUMP="major"
+              break
+            fi
+            if echo "$msg" | grep -qE '^feat(\(.+\))?:'; then
+              BUMP="minor"
+            fi
+          done <<< "$COMMITS"
+
+          # Parse current version
+          VERSION="${LATEST_TAG#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+          esac
+
+          echo "version=v${MAJOR}.${MINOR}.${PATCH}" >> "$GITHUB_OUTPUT"
+          echo "major=v${MAJOR}" >> "$GITHUB_OUTPUT"
+          echo "Bump: $BUMP -> v${MAJOR}.${MINOR}.${PATCH}"
+
+      - name: Create tags
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+          MAJOR: ${{ steps.bump.outputs.major }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git tag -fa "$MAJOR" -m "Latest $MAJOR release"
+          git push origin "$VERSION"
+          git push origin "$MAJOR" --force
