@@ -1,8 +1,8 @@
-import { readFile, writeFile, mkdir, cp } from "fs/promises";
-import { resolve, join, dirname, relative } from "path";
+import { readFile, writeFile, mkdir } from "fs/promises";
+import { resolve, join, dirname } from "path";
 import { Marked } from "marked";
 import { createHighlighter } from "shiki";
-import type { Manifest } from "./manifest.js";
+import type { Manifest, SectionManifest } from "./manifest.js";
 
 interface NavItem {
   title: string;
@@ -10,25 +10,28 @@ interface NavItem {
   active?: boolean;
 }
 
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+type NavEntry = NavItem | NavGroup;
+
+function isGroup(entry: NavEntry): entry is NavGroup {
+  return "items" in entry;
+}
+
 export async function renderSite(docsDir: string): Promise<string> {
   const siteDir = resolve(join(docsDir, "_site"));
   await mkdir(siteDir, { recursive: true });
 
-  // Read manifest to get section order
+  // Read manifest to get section order and groups
   const manifestPath = resolve(join(docsDir, ".openapi-docs-manifest.json"));
   const manifest: Manifest = JSON.parse(await readFile(manifestPath, "utf-8"));
 
-  // Build navigation from manifest sections sorted by the file structure
   const sections = Object.entries(manifest.sections)
-    .sort(([, a], [, b]) => a.outputPath.localeCompare(b.outputPath))
-    .map(([id, sec]) => ({ id, ...sec }));
-
-  // Put index first
-  sections.sort((a, b) => {
-    if (a.outputPath === "index.md") return -1;
-    if (b.outputPath === "index.md") return 1;
-    return 0;
-  });
+    .map(([id, sec]) => ({ id, ...sec }))
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
   // Set up markdown renderer with shiki
   const highlighter = await createHighlighter({
@@ -56,7 +59,6 @@ export async function renderSite(docsDir: string): Promise<string> {
             theme: "github-light",
           });
         } catch {
-          // Unsupported language, fall back to plain
           return `<pre><code class="language-${language}">${escapeHtml(text)}</code></pre>`;
         }
       },
@@ -73,11 +75,9 @@ export async function renderSite(docsDir: string): Promise<string> {
     const titleMatch = mdContent.match(/^#\s+(.+)$/m);
     const title = titleMatch ? titleMatch[1] : section.id;
 
-    // Build nav for this page
     const htmlPath = section.outputPath.replace(/\.md$/, ".html");
     const nav = buildNav(sections, htmlPath);
 
-    // Build relative path to root for asset references
     const depth = htmlPath.split("/").length - 1;
     const rootPath = depth > 0 ? "../".repeat(depth) : "./";
 
@@ -93,39 +93,72 @@ export async function renderSite(docsDir: string): Promise<string> {
 
   highlighter.dispose();
 
-  const pageCount = sections.length;
-  console.log(`  Static site: ${pageCount} pages → ${siteDir}`);
+  console.log(`  Static site: ${sections.length} pages → ${siteDir}`);
   return siteDir;
 }
 
 function buildNav(
-  sections: Array<{ id: string; outputPath: string }>,
+  sections: Array<{ id: string; outputPath: string; title: string; group?: string }>,
   currentPath: string
-): NavItem[] {
-  return sections.map((sec) => {
+): NavEntry[] {
+  const entries: NavEntry[] = [];
+  const groups = new Map<string, NavItem[]>();
+
+  for (const sec of sections) {
     const href = sec.outputPath.replace(/\.md$/, ".html");
-    // Extract display name from outputPath
-    const name = sec.outputPath
-      .replace(/\.md$/, "")
-      .replace(/^endpoints\//, "")
-      .replace(/^index$/, "Overview");
-    const title = name.charAt(0).toUpperCase() + name.slice(1);
-    return { title, href, active: href === currentPath };
-  });
+    const item: NavItem = {
+      title: sec.title,
+      href,
+      active: href === currentPath,
+    };
+
+    if (sec.group) {
+      let group = groups.get(sec.group);
+      if (!group) {
+        group = [];
+        groups.set(sec.group, group);
+        // Insert a group placeholder at this position
+        entries.push({ label: sec.group, items: group });
+      }
+      group.push(item);
+    } else {
+      entries.push(item);
+    }
+  }
+
+  return entries;
+}
+
+function renderNav(entries: NavEntry[], rootPath: string): string {
+  return entries
+    .map((entry) => {
+      if (isGroup(entry)) {
+        const items = entry.items
+          .map((item) => {
+            const cls = item.active ? ' class="active"' : "";
+            return `<li${cls}><a href="${rootPath}${item.href}">${escapeHtml(item.title)}</a></li>`;
+          })
+          .join("\n            ");
+        return `<li class="nav-group">
+          <span class="nav-group-label">${escapeHtml(entry.label)}</span>
+          <ul>
+            ${items}
+          </ul>
+        </li>`;
+      }
+      const cls = entry.active ? ' class="active"' : "";
+      return `<li${cls}><a href="${rootPath}${entry.href}">${escapeHtml(entry.title)}</a></li>`;
+    })
+    .join("\n          ");
 }
 
 function template(
   title: string,
   content: string,
-  nav: NavItem[],
+  nav: NavEntry[],
   rootPath: string
 ): string {
-  const navHtml = nav
-    .map((item) => {
-      const cls = item.active ? ' class="active"' : "";
-      return `<li${cls}><a href="${rootPath}${item.href}">${item.title}</a></li>`;
-    })
-    .join("\n          ");
+  const navHtml = renderNav(nav, rootPath);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -166,13 +199,14 @@ function escapeHtml(str: string): string {
 
 const CSS = `/* opper-openapi-docs */
 :root {
-  --sidebar-width: 240px;
+  --sidebar-width: 260px;
   --content-max: 800px;
   --color-bg: #ffffff;
   --color-sidebar-bg: #f8f9fa;
   --color-border: #e1e4e8;
   --color-text: #24292e;
   --color-text-secondary: #586069;
+  --color-text-muted: #8b949e;
   --color-link: #0366d6;
   --color-active: #0366d6;
   --color-active-bg: #f0f4ff;
@@ -221,7 +255,7 @@ body {
   text-decoration: none;
 }
 
-.sidebar ul {
+.sidebar > ul {
   list-style: none;
 }
 
@@ -244,6 +278,29 @@ body {
   border-left-color: var(--color-active);
   background: var(--color-active-bg);
   font-weight: 500;
+}
+
+/* Nav groups */
+.nav-group {
+  margin-top: 0.75rem;
+}
+
+.nav-group-label {
+  display: block;
+  padding: 0.25rem 1rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.nav-group ul {
+  list-style: none;
+}
+
+.nav-group li a {
+  padding-left: 1.25rem;
 }
 
 /* Content */
@@ -370,10 +427,19 @@ article blockquote {
     border-bottom: 1px solid var(--color-border);
   }
 
-  .sidebar ul {
+  .sidebar > ul {
     display: flex;
     flex-wrap: wrap;
     gap: 0;
+  }
+
+  .nav-group {
+    margin-top: 0;
+  }
+
+  .nav-group ul {
+    display: flex;
+    flex-wrap: wrap;
   }
 
   .sidebar li a {

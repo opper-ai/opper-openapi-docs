@@ -5,6 +5,9 @@ import { createHash } from "crypto";
 export interface SectionManifest {
   contentHash: string;
   outputPath: string;
+  title: string;
+  group?: string;
+  order: number;
   generatedAt: string;
 }
 

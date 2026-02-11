@@ -164,6 +164,9 @@ async function updateManifest(
     newManifest.sections[section.id] = {
       contentHash: computeSectionHash(section, specIndex),
       outputPath: section.outputPath,
+      title: section.title,
+      group: section.group,
+      order: section.order,
       generatedAt: new Date().toISOString(),
     };
   }

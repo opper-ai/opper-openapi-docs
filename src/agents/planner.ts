@@ -9,6 +9,7 @@ const SectionSchema = z.object({
   outputPath: z.string().describe("Relative file path, e.g. 'index.md', 'endpoints/users.md'"),
   type: z.enum(["overview", "auth", "endpoint-group", "schemas", "errors"]),
   description: z.string().describe("Brief description of what this section should cover"),
+  group: z.string().optional().describe("Navigation group name for sidebar grouping, e.g. 'Compatibility', 'Core'. Sections with the same group are grouped together in the nav. Leave empty for top-level sections like overview, auth, schemas, errors."),
   relatedTags: z.array(z.string()).optional().describe("Tags this section depends on"),
   relatedSchemas: z.array(z.string()).optional().describe("Schema names this section depends on"),
   order: z.number().describe("Display order in navigation"),
@@ -45,7 +46,14 @@ Rules:
 - Each section must declare its relatedTags and relatedSchemas so we can compute content hashes
 - For endpoint-group sections, set relatedTags to the tag name and relatedSchemas to schemas referenced by those endpoints
 - Use lowercase kebab-case for file paths
-- Order sections logically: overview first, then auth, then endpoint groups alphabetically, then schemas, then errors
+- Order sections logically: overview first, then auth, then endpoint groups, then schemas, then errors
+
+Navigation grouping:
+- Use the "group" field to organize endpoint sections into logical groups in the sidebar
+- Analyze the API structure and group related endpoints together (e.g. OpenAI-compatible endpoints, resource CRUD endpoints, utility endpoints)
+- Top-level sections (overview, auth, schemas, errors) should NOT have a group
+- Only endpoint-group sections should have a group
+- Choose short, descriptive group names
 
 Use the tools to explore the spec before deciding on the structure.${userInstructions}`,
     tools: tools.all,
