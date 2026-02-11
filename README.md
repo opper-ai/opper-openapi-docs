@@ -91,7 +91,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: opper-ai/opper-openapi-docs@main
+      - uses: opper-ai/opper-openapi-docs@v1
         with:
           spec: ./openapi.yaml
           opper-api-key: ${{ secrets.OPPER_API_KEY }}
@@ -138,7 +138,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: opper-ai/opper-openapi-docs@main
+      - uses: opper-ai/opper-openapi-docs@v1
         id: docs
         with:
           spec: ./openapi.yaml
