@@ -164,6 +164,9 @@ export async function renderSite(docsDir: string): Promise<string> {
   // Write CSS
   await writeFile(resolve(join(siteDir, "style.css")), CSS);
 
+  // Generate llms.txt files and copy markdown sources
+  await generateLlmsTxt(siteDir, sections, sectionData, siteConfig);
+
   highlighter.dispose();
 
   console.log(`  Static site: ${sections.length} pages → ${siteDir}`);
@@ -280,6 +283,11 @@ function template(
       <ul>
           ${navHtml}
       </ul>
+      <div class="sidebar-footer">
+        <span class="sidebar-footer-label">For AI Agents</span>
+        <a href="${rootPath}llms.txt">llms.txt</a>
+        <a href="${rootPath}llms-full.txt">llms-full.txt</a>
+      </div>
     </nav>
     <main class="content">
       <article>
@@ -290,6 +298,51 @@ function template(
 </body>
 </html>
 `;
+}
+
+async function generateLlmsTxt(
+  siteDir: string,
+  sections: Array<{ id: string; outputPath: string; title: string; group?: string; order?: number }>,
+  sectionData: Map<string, { mdContent: string; headings: Heading[]; title: string; htmlPath: string }>,
+  siteConfig: SiteConfig
+): Promise<void> {
+  const siteTitle = siteConfig.title ?? "API Docs";
+
+  // Copy .md files into site dir so llms.txt links resolve
+  for (const section of sections) {
+    const data = sectionData.get(section.id)!;
+    const mdOutPath = resolve(join(siteDir, section.outputPath));
+    await mkdir(dirname(mdOutPath), { recursive: true });
+    await writeFile(mdOutPath, data.mdContent);
+  }
+
+  // Build llms.txt — index with links
+  const llmsLines: string[] = [`# ${siteTitle}`, ""];
+  const firstSection = sections[0];
+  if (firstSection) {
+    const firstData = sectionData.get(firstSection.id)!;
+    const firstParagraph = firstData.mdContent.match(/^(?!#)(.+)$/m);
+    if (firstParagraph) {
+      llmsLines.push(`> ${firstParagraph[1].trim()}`, "");
+    }
+  }
+  llmsLines.push("## Docs", "");
+  for (const section of sections) {
+    const data = sectionData.get(section.id)!;
+    llmsLines.push(`- [${data.title}](${section.outputPath}): ${section.title}`);
+  }
+  llmsLines.push("");
+  await writeFile(resolve(join(siteDir, "llms.txt")), llmsLines.join("\n"));
+
+  // Build llms-full.txt — all content concatenated
+  const fullLines: string[] = [`# ${siteTitle}`, ""];
+  for (const section of sections) {
+    const data = sectionData.get(section.id)!;
+    // Strip the H1 title from each section since we have our own
+    const contentWithoutH1 = data.mdContent.replace(/^#\s+.+\n+/, "");
+    fullLines.push(`## ${data.title}`, "", contentWithoutH1.trim(), "", "---", "");
+  }
+  await writeFile(resolve(join(siteDir, "llms-full.txt")), fullLines.join("\n"));
 }
 
 function escapeHtml(str: string): string {
@@ -445,6 +498,42 @@ body {
 .toc-item a:hover {
   color: var(--color-text-secondary) !important;
   background: none !important;
+}
+
+/* Sidebar footer (llms.txt links) */
+.sidebar-footer {
+  margin-top: 1.5rem;
+  padding: 0.75rem 1rem 0;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.sidebar-footer-label {
+  width: 100%;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.sidebar-footer a {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  text-decoration: none;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-bg);
+}
+
+.sidebar-footer a:hover {
+  color: var(--color-text-secondary);
+  border-color: var(--color-text-muted);
 }
 
 /* Content */

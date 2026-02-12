@@ -200,6 +200,55 @@ describe("renderSite", () => {
 
     expect(css).toContain("--shiki-dark");
   });
+
+  it("generates llms.txt index file", async () => {
+    const siteDir = await renderSite(TEST_DIR);
+    const llmsTxt = await readFile(join(siteDir, "llms.txt"), "utf-8");
+
+    // Should have an H1 title
+    expect(llmsTxt).toMatch(/^# /);
+    // Should have a Docs section with links
+    expect(llmsTxt).toContain("## Docs");
+    expect(llmsTxt).toContain("[Overview]");
+    expect(llmsTxt).toContain("[Authentication]");
+    expect(llmsTxt).toContain("[Pets]");
+    // Links should point to .md files
+    expect(llmsTxt).toContain("index.md");
+    expect(llmsTxt).toContain("authentication.md");
+    expect(llmsTxt).toContain("endpoints/pets.md");
+  });
+
+  it("generates llms-full.txt with all content concatenated", async () => {
+    const siteDir = await renderSite(TEST_DIR);
+    const llmsFull = await readFile(join(siteDir, "llms-full.txt"), "utf-8");
+
+    // Should have an H1 title
+    expect(llmsFull).toMatch(/^# /);
+    // Should contain content from all sections
+    expect(llmsFull).toContain("Welcome.");
+    expect(llmsFull).toContain("Use Bearer tokens.");
+    expect(llmsFull).toContain("GET /pets");
+    expect(llmsFull).toContain("GET /stores");
+    expect(llmsFull).toContain("POST /chat");
+  });
+
+  it("copies markdown files to site directory", async () => {
+    const siteDir = await renderSite(TEST_DIR);
+
+    const indexMd = await readFile(join(siteDir, "index.md"), "utf-8");
+    expect(indexMd).toContain("Welcome.");
+
+    const petsMd = await readFile(join(siteDir, "endpoints/pets.md"), "utf-8");
+    expect(petsMd).toContain("GET /pets");
+  });
+
+  it("includes llms.txt links in sidebar", async () => {
+    const siteDir = await renderSite(TEST_DIR);
+    const indexHtml = await readFile(join(siteDir, "index.html"), "utf-8");
+
+    expect(indexHtml).toContain("llms.txt");
+    expect(indexHtml).toContain("llms-full.txt");
+  });
 });
 
 describe("renderSite with branding", () => {
