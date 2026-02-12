@@ -45,7 +45,7 @@ Guidelines:
 - Do NOT include a top-level heading (# Title) - it will be added automatically
 
 The full documentation plan is provided so you can create cross-links to other sections.
-When linking to other sections, use relative markdown links but with .html extensions instead of .md (e.g. if outputPath is "endpoints/pets.md", link to "endpoints/pets.html").${userInstructions}`,
+When linking to other sections, use relative markdown links based on the outputPath values.${userInstructions}`,
     tools: tools.all,
     model: options.model,
     outputSchema: SectionOutputSchema,
