@@ -138,6 +138,7 @@ on:
       - 'openapi.yaml'
 
 permissions:
+  contents: read
   pages: write
   id-token: write
 
@@ -149,6 +150,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+
+      # Cache docs output so only changed sections are regenerated
+      - uses: actions/cache@v4
+        with:
+          path: ./docs
+          key: api-docs-${{ hashFiles('openapi.yaml') }}
+          restore-keys: api-docs-
 
       - uses: opper-ai/opper-openapi-docs@v1
         id: docs
