@@ -15,6 +15,10 @@ inputs:
   site:
     description: 'Generate static site'
     default: 'true'
+  title:
+    description: 'Site title for sidebar header'
+  icon:
+    description: 'Path to icon file (SVG/PNG) for sidebar header'
   opper-api-key:
     description: 'Opper API key'
     required: true
@@ -55,6 +59,8 @@ runs:
         INPUT_INSTRUCTIONS: ${{ inputs.instructions }}
         INPUT_MODEL: ${{ inputs.model }}
         INPUT_SITE: ${{ inputs.site }}
+        INPUT_TITLE: ${{ inputs.title }}
+        INPUT_ICON: ${{ inputs.icon }}
         ACTION_PATH: ${{ github.action_path }}
       run: |
         ARGS=(--spec "$INPUT_SPEC" --output "$INPUT_OUTPUT")
@@ -69,6 +75,14 @@ runs:
 
         if [ "$INPUT_SITE" = "true" ]; then
           ARGS+=(--site)
+        fi
+
+        if [ -n "$INPUT_TITLE" ]; then
+          ARGS+=(--title "$INPUT_TITLE")
+        fi
+
+        if [ -n "$INPUT_ICON" ]; then
+          ARGS+=(--icon "$INPUT_ICON")
         fi
 
         node "$ACTION_PATH/dist/cli.js" generate "${ARGS[@]}"

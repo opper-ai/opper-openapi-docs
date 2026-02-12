@@ -8,6 +8,8 @@ export interface Config {
   model?: string;
   site?: boolean;
   force?: boolean;
+  title?: string;
+  icon?: string;
 }
 
 const CONFIG_FILENAME = "opper-docs.config.json";
@@ -29,6 +31,8 @@ export async function loadConfig(cliOptions: Partial<Config>): Promise<Config> {
     model: cliOptions.model ?? fileConfig.model,
     site: cliOptions.site ?? fileConfig.site ?? false,
     force: cliOptions.force ?? false,
+    title: cliOptions.title ?? fileConfig.title,
+    icon: cliOptions.icon ?? fileConfig.icon,
   };
 
   if (!merged.spec) {
