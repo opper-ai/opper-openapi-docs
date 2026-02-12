@@ -17,6 +17,11 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ./docs
+          key: demo-docs-${{ hashFiles('test/fixtures/petstore.yaml') }}
+          restore-keys: demo-docs-
       - uses: ./
         id: docs
         with:
