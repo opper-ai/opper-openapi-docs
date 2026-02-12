@@ -74,10 +74,27 @@ jobs:
           echo "major=v${MAJOR}" >> "$GITHUB_OUTPUT"
           echo "Bump: $BUMP -> v${MAJOR}.${MINOR}.${PATCH}"
 
-      - name: Create tags
+      - name: Generate release notes
+        id: notes
+        run: |
+          LATEST_TAG=$(git tag -l 'v*.*.*' --sort=-v:refname | head -n1)
+          if [ -n "$LATEST_TAG" ]; then
+            NOTES=$(git log "${LATEST_TAG}..HEAD" --pretty=format:"- %s" | grep -v "^- Merge")
+          else
+            NOTES="- Initial release"
+          fi
+          {
+            echo "notes<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create tags and release
         env:
           VERSION: ${{ steps.bump.outputs.version }}
           MAJOR: ${{ steps.bump.outputs.major }}
+          NOTES: ${{ steps.notes.outputs.notes }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -86,3 +103,5 @@ jobs:
           git tag -fa "$MAJOR" -m "Latest $MAJOR release"
           git push origin "$VERSION"
           git push origin "$MAJOR" --force
+
+          gh release create "$VERSION" --title "$VERSION" --notes "$NOTES"

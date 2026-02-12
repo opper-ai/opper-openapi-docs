@@ -1,6 +1,10 @@
 name: 'Opper OpenAPI Docs'
 description: 'Generate API docs from OpenAPI spec using AI agents'
 
+branding:
+  icon: 'book-open'
+  color: 'blue'
+
 inputs:
   spec:
     description: 'Path to OpenAPI spec file'
