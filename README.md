@@ -62,7 +62,7 @@ Create `opper-docs.config.json` to avoid repeating flags:
   "spec": "./openapi.yaml",
   "output": "./docs",
   "instructions": "Write concise docs aimed at backend developers. Use curl for examples.",
-  "model": "openai/gpt-4o",
+  "model": "openai/gpt-5.2",
   "title": "My API",
   "icon": "./logo.svg"
 }
