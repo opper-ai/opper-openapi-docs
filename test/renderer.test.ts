@@ -242,6 +242,22 @@ describe("renderSite", () => {
     expect(petsMd).toContain("GET /pets");
   });
 
+  it("includes copy markdown button", async () => {
+    const siteDir = await renderSite(TEST_DIR);
+    const indexHtml = await readFile(join(siteDir, "index.html"), "utf-8");
+
+    expect(indexHtml).toContain("copy-md-btn");
+    expect(indexHtml).toContain("index.md");
+  });
+
+  it("copy button points to correct md path for nested pages", async () => {
+    const siteDir = await renderSite(TEST_DIR);
+    const petsHtml = await readFile(join(siteDir, "endpoints/pets.html"), "utf-8");
+
+    expect(petsHtml).toContain("copy-md-btn");
+    expect(petsHtml).toContain("endpoints/pets.md");
+  });
+
   it("includes llms.txt links in sidebar", async () => {
     const siteDir = await renderSite(TEST_DIR);
     const indexHtml = await readFile(join(siteDir, "index.html"), "utf-8");

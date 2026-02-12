@@ -154,7 +154,8 @@ export async function renderSite(docsDir: string): Promise<string> {
     const depth = data.htmlPath.split("/").length - 1;
     const rootPath = depth > 0 ? "../".repeat(depth) : "./";
 
-    const fullHtml = template(data.title, htmlContent, nav, rootPath, siteConfig);
+    const mdPath = section.outputPath;
+    const fullHtml = template(data.title, htmlContent, nav, rootPath, siteConfig, mdPath);
 
     const outPath = resolve(join(siteDir, data.htmlPath));
     await mkdir(dirname(outPath), { recursive: true });
@@ -258,13 +259,15 @@ function template(
   content: string,
   nav: NavEntry[],
   rootPath: string,
-  siteConfig: SiteConfig = {}
+  siteConfig: SiteConfig = {},
+  mdPath?: string
 ): string {
   const navHtml = renderNav(nav, rootPath);
   const siteTitle = siteConfig.title ?? "API Docs";
   const iconHtml = siteConfig.icon
     ? `<img src="${rootPath}${escapeHtml(siteConfig.icon)}" alt="" class="logo-icon"> `
     : "";
+  const mdHref = mdPath ? `${rootPath}${mdPath}` : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -290,11 +293,32 @@ function template(
       </div>
     </nav>
     <main class="content">
+      <div class="content-header">
+        ${mdPath ? `<button class="copy-md-btn" data-md-href="${mdHref}" title="Copy page as Markdown"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>` : ""}
+      </div>
       <article>
         ${content}
       </article>
     </main>
-  </div>
+  </div>${mdPath ? `
+  <script>
+    document.querySelector('.copy-md-btn')?.addEventListener('click', async function() {
+      var btn = this;
+      var href = btn.getAttribute('data-md-href');
+      var original = btn.innerHTML;
+      var check = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+      try {
+        var res = await fetch(href);
+        if (!res.ok) throw new Error(res.status);
+        var md = await res.text();
+        await navigator.clipboard.writeText(md);
+        btn.innerHTML = check; // Safe: hardcoded SVG, no user input
+      } catch(e) {
+        console.error('Copy failed:', e);
+      }
+      setTimeout(function() { btn.innerHTML = original; }, 2000); // Safe: restoring original hardcoded SVG
+    });
+  </script>` : ""}
 </body>
 </html>
 `;
@@ -589,6 +613,30 @@ article ul, article ol {
 
 article li {
   margin-bottom: 0.25rem;
+}
+
+/* Content header */
+.content-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
+}
+
+.copy-md-btn {
+  color: var(--color-text-muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 0.3rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.copy-md-btn:hover {
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
 }
 
 /* Code */
