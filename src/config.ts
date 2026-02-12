@@ -8,9 +8,12 @@ export interface Config {
   model?: string;
   site?: boolean;
   force?: boolean;
+  title?: string;
+  icon?: string;
 }
 
 const CONFIG_FILENAME = "opper-docs.config.json";
+const DEFAULT_MODEL = "openai/gpt-5.2";
 
 export async function loadConfig(cliOptions: Partial<Config>): Promise<Config> {
   let fileConfig: Partial<Config> = {};
@@ -26,9 +29,11 @@ export async function loadConfig(cliOptions: Partial<Config>): Promise<Config> {
     spec: cliOptions.spec ?? fileConfig.spec ?? "",
     output: cliOptions.output ?? fileConfig.output ?? "./docs",
     instructions: cliOptions.instructions ?? fileConfig.instructions,
-    model: cliOptions.model ?? fileConfig.model,
+    model: cliOptions.model ?? fileConfig.model ?? DEFAULT_MODEL,
     site: cliOptions.site ?? fileConfig.site ?? false,
     force: cliOptions.force ?? false,
+    title: cliOptions.title ?? fileConfig.title,
+    icon: cliOptions.icon ?? fileConfig.icon,
   };
 
   if (!merged.spec) {

@@ -29,9 +29,11 @@ npx opper-openapi-docs generate --spec ./openapi.yaml [options]
 | `--spec <path>` | Path to OpenAPI spec file | (required) |
 | `--output <dir>` | Output directory | `./docs` |
 | `--instructions <text>` | Custom tone/audience instructions | |
-| `--model <model>` | LLM model to use | |
+| `--model <model>` | LLM model to use | `openai/gpt-5.2` |
 | `--site` | Also generate a static HTML site | |
 | `--force` | Regenerate all sections (ignore cache) | |
+| `--title <text>` | Site title for sidebar header | `API Docs` |
+| `--icon <path>` | Path to icon file (SVG/PNG) for sidebar | |
 
 ### `render`
 
@@ -58,7 +60,9 @@ Create `opper-docs.config.json` to avoid repeating flags:
   "spec": "./openapi.yaml",
   "output": "./docs",
   "instructions": "Write concise docs aimed at backend developers. Use curl for examples.",
-  "model": "openai/gpt-4o"
+  "model": "openai/gpt-4o",
+  "title": "My API",
+  "icon": "./logo.svg"
 }
 ```
 
@@ -104,8 +108,10 @@ jobs:
 | `spec` | Path to OpenAPI spec file | Yes | |
 | `output` | Output directory | No | `./docs` |
 | `instructions` | Custom documentation instructions | No | |
-| `model` | LLM model to use | No | |
+| `model` | LLM model to use | No | `openai/gpt-5.2` |
 | `site` | Generate static site | No | `true` |
+| `title` | Site title for sidebar header | No | `API Docs` |
+| `icon` | Path to icon file (SVG/PNG) for sidebar | No | |
 | `opper-api-key` | Opper API key | Yes | |
 
 ### Outputs
@@ -116,6 +122,12 @@ jobs:
 | `site-dir` | Path to generated static site (when `site: true`) |
 
 ### Deploy to GitHub Pages
+
+Auto-deploy your docs whenever the spec changes.
+
+**Prerequisites:**
+1. Add `OPPER_API_KEY` to your repo secrets (Settings > Secrets and variables > Actions)
+2. Enable GitHub Pages with source "GitHub Actions" (Settings > Pages > Source)
 
 ```yaml
 name: Deploy API Docs
@@ -142,6 +154,8 @@ jobs:
         id: docs
         with:
           spec: ./openapi.yaml
+          title: My API
+          icon: ./logo.svg
           opper-api-key: ${{ secrets.OPPER_API_KEY }}
 
       - uses: actions/configure-pages@v5
@@ -153,6 +167,22 @@ jobs:
       - uses: actions/deploy-pages@v4
         id: deployment
 ```
+
+## Customization
+
+### Branding
+
+Set a custom title and icon for the sidebar header:
+
+```bash
+npx opper-openapi-docs generate --spec ./openapi.yaml --site --title "My API" --icon ./logo.svg
+```
+
+The icon can be any SVG or PNG file. It's copied into the site output and displayed at 24px height next to the title.
+
+### Dark Mode
+
+The generated site automatically respects the user's OS dark mode preference via `prefers-color-scheme`. No configuration needed — code blocks also switch between light and dark syntax themes.
 
 ## How It Works
 

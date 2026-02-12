@@ -1,0 +1,29 @@
+name: Demo
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        id: docs
+        with:
+          spec: ./test/fixtures/petstore.yaml
+          opper-api-key: ${{ secrets.OPPER_API_KEY }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ steps.docs.outputs.site-dir }}
+      - uses: actions/deploy-pages@v4
+        id: deployment

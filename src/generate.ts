@@ -85,7 +85,7 @@ export async function generate(config: Config): Promise<void> {
 
   console.log(`\nGenerating ${sectionsToGenerate.length} section(s)...`);
 
-  // 5. Run doc writer agent for each changed section (sequentially)
+  // 5. Run doc writer agent for each changed section (in parallel)
   const writer = createWriterAgent(specIndex, {
     instructions: config.instructions,
     model: config.model,
@@ -93,23 +93,20 @@ export async function generate(config: Config): Promise<void> {
 
   const results = new Map<string, string>();
 
-  for (const section of sectionsToGenerate.sort((a, b) => a.order - b.order)) {
-    console.log(`  Writing: ${section.title}...`);
+  const writeResults = await Promise.allSettled(
+    sectionsToGenerate.map(async (section) => {
+      console.log(`  Writing: ${section.title}...`);
+      const { result } = await writer.run({ section, plan });
+      return { id: section.id, title: section.title, markdown: `# ${result.title}\n\n${result.markdown}` };
+    })
+  );
 
-    try {
-      const { result } = await writer.run({
-        section,
-        plan,
-      });
-
-      // Add the title heading
-      const markdown = `# ${result.title}\n\n${result.markdown}`;
-      results.set(section.id, markdown);
-      console.log(`  Done: ${section.title}`);
-    } catch (err) {
-      console.error(
-        `  Failed: ${section.title} - ${err instanceof Error ? err.message : String(err)}`
-      );
+  for (const r of writeResults) {
+    if (r.status === "fulfilled") {
+      results.set(r.value.id, r.value.markdown);
+      console.log(`  Done: ${r.value.title}`);
+    } else {
+      console.error(`  Failed: ${r.reason}`);
     }
   }
 

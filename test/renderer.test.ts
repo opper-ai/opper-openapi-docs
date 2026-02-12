@@ -6,6 +6,7 @@ import { resolve, join } from "path";
 import { tmpdir } from "os";
 
 const TEST_DIR = resolve(join(tmpdir(), "opper-docs-renderer-test"));
+const BRANDED_DIR = resolve(join(tmpdir(), "opper-docs-renderer-branded-test"));
 
 beforeAll(async () => {
   await mkdir(join(TEST_DIR, "endpoints"), { recursive: true });
@@ -56,7 +57,7 @@ beforeAll(async () => {
     },
   });
 
-  await writeFile(join(TEST_DIR, "index.md"), "# Overview\n\nWelcome.\n\n```bash\ncurl https://api.example.com\n```\n");
+  await writeFile(join(TEST_DIR, "index.md"), "# Overview\n\nWelcome.\n\nSee [Authentication](authentication.md) and [Pets](endpoints/pets.md#list-pets).\n\n```bash\ncurl https://api.example.com\n```\n");
   await writeFile(join(TEST_DIR, "authentication.md"), "# Authentication\n\nUse Bearer tokens.\n");
   await writeFile(join(TEST_DIR, "endpoints/pets.md"), "# Pets\n\n## List Pets\n\n`GET /pets`\n\n## Create Pet\n\n`POST /pets`\n\n### Request Body\n\nJSON body.\n");
   await writeFile(join(TEST_DIR, "endpoints/stores.md"), "# Stores\n\n`GET /stores`\n");
@@ -160,7 +161,109 @@ describe("renderSite", () => {
     const siteDir = await renderSite(TEST_DIR);
     const indexHtml = await readFile(join(siteDir, "index.html"), "utf-8");
 
-    // The index page should not show the pets TOC
-    expect(indexHtml).not.toContain("#list-pets");
+    // The index page should not show the pets TOC in the sidebar nav
+    // (it may still contain #list-pets as a content link)
+    const sidebarMatch = indexHtml.match(/<nav class="sidebar">([\s\S]*?)<\/nav>/);
+    expect(sidebarMatch).toBeTruthy();
+    expect(sidebarMatch![1]).not.toContain("#list-pets");
+  });
+
+  it("rewrites .md links to .html in rendered output", async () => {
+    const siteDir = await renderSite(TEST_DIR);
+    const indexHtml = await readFile(join(siteDir, "index.html"), "utf-8");
+
+    expect(indexHtml).toContain('href="authentication.html"');
+    expect(indexHtml).toContain('href="endpoints/pets.html#list-pets"');
+    expect(indexHtml).not.toContain('href="authentication.md"');
+  });
+
+  it("shows default 'API Docs' title when no site config", async () => {
+    const siteDir = await renderSite(TEST_DIR);
+    const indexHtml = await readFile(join(siteDir, "index.html"), "utf-8");
+
+    expect(indexHtml).toContain("API Docs");
+  });
+
+  it("includes dark mode CSS with prefers-color-scheme", async () => {
+    const siteDir = await renderSite(TEST_DIR);
+    const css = await readFile(join(siteDir, "style.css"), "utf-8");
+
+    expect(css).toContain("prefers-color-scheme: dark");
+    expect(css).toContain("#0d1117");
+    expect(css).toContain("#161b22");
+    expect(css).toContain("#58a6ff");
+  });
+
+  it("includes dark mode shiki overrides", async () => {
+    const siteDir = await renderSite(TEST_DIR);
+    const css = await readFile(join(siteDir, "style.css"), "utf-8");
+
+    expect(css).toContain("--shiki-dark");
+  });
+});
+
+describe("renderSite with branding", () => {
+  beforeAll(async () => {
+    await mkdir(BRANDED_DIR, { recursive: true });
+
+    await writeManifest(BRANDED_DIR, {
+      version: 1,
+      specHash: "abc",
+      instructionsHash: "def",
+      sections: {
+        overview: {
+          contentHash: "aaa",
+          outputPath: "index.md",
+          title: "Overview",
+          order: 0,
+          generatedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    await writeFile(join(BRANDED_DIR, "index.md"), "# Overview\n\nWelcome.\n");
+
+    // Create a test icon file
+    await writeFile(join(BRANDED_DIR, "test-icon.svg"), "<svg></svg>");
+
+    // Write site config with custom title and icon
+    await writeFile(
+      join(BRANDED_DIR, ".openapi-docs-site.json"),
+      JSON.stringify({ title: "Petstore API", icon: join(BRANDED_DIR, "test-icon.svg") })
+    );
+  });
+
+  afterAll(async () => {
+    await rm(BRANDED_DIR, { recursive: true, force: true });
+  });
+
+  it("renders custom title from site config", async () => {
+    const siteDir = await renderSite(BRANDED_DIR);
+    const indexHtml = await readFile(join(siteDir, "index.html"), "utf-8");
+
+    expect(indexHtml).toContain("Petstore API");
+    expect(indexHtml).not.toContain(">API Docs<");
+  });
+
+  it("renders icon img tag when icon is configured", async () => {
+    const siteDir = await renderSite(BRANDED_DIR);
+    const indexHtml = await readFile(join(siteDir, "index.html"), "utf-8");
+
+    expect(indexHtml).toContain('<img src="');
+    expect(indexHtml).toContain('class="logo-icon"');
+  });
+
+  it("copies icon file to site directory", async () => {
+    const siteDir = await renderSite(BRANDED_DIR);
+
+    const iconContent = await readFile(join(siteDir, "test-icon.svg"), "utf-8");
+    expect(iconContent).toContain("<svg>");
+  });
+
+  it("includes logo-icon CSS", async () => {
+    const siteDir = await renderSite(BRANDED_DIR);
+    const css = await readFile(join(siteDir, "style.css"), "utf-8");
+
+    expect(css).toContain(".logo-icon");
   });
 });

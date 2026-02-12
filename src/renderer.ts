@@ -1,8 +1,13 @@
-import { readFile, writeFile, mkdir } from "fs/promises";
+import { readFile, writeFile, mkdir, copyFile } from "fs/promises";
 import { resolve, join, dirname } from "path";
 import { Marked } from "marked";
 import { createHighlighter } from "shiki";
 import type { Manifest } from "./manifest.js";
+
+export interface SiteConfig {
+  title?: string;
+  icon?: string;
+}
 
 interface Heading {
   level: number;
@@ -64,9 +69,18 @@ export async function renderSite(docsDir: string): Promise<string> {
     .map(([id, sec]) => ({ id, ...sec }))
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
+  // Read optional site config for branding
+  let siteConfig: SiteConfig = {};
+  try {
+    const raw = await readFile(resolve(join(docsDir, ".openapi-docs-site.json")), "utf-8");
+    siteConfig = JSON.parse(raw);
+  } catch {
+    // No site config, use defaults
+  }
+
   // Set up markdown renderer with shiki + heading IDs
   const highlighter = await createHighlighter({
-    themes: ["github-light"],
+    themes: ["github-light", "github-dark"],
     langs: [
       "bash",
       "json",
@@ -86,12 +100,18 @@ export async function renderSite(docsDir: string): Promise<string> {
         const slug = slugify(text.replace(/<[^>]*>/g, ""));
         return `<h${depth} id="${slug}">${text}</h${depth}>\n`;
       },
+      link({ href, text }) {
+        // Rewrite relative .md links to .html for the static site
+        const rewritten = href.replace(/\.md(#|$)/g, ".html$1");
+        return `<a href="${rewritten}">${text}</a>`;
+      },
       code({ text, lang }) {
         const language = lang || "text";
         try {
           return highlighter.codeToHtml(text, {
             lang: language,
-            theme: "github-light",
+            themes: { light: "github-light", dark: "github-dark" },
+            defaultColor: "light",
           });
         } catch {
           return `<pre><code class="language-${language}">${escapeHtml(text)}</code></pre>`;
@@ -116,6 +136,14 @@ export async function renderSite(docsDir: string): Promise<string> {
     sectionData.set(section.id, { mdContent, headings, title, htmlPath });
   }
 
+  // Copy icon if provided
+  if (siteConfig.icon) {
+    const iconSrc = resolve(siteConfig.icon);
+    const iconFilename = siteConfig.icon.split("/").pop()!;
+    await copyFile(iconSrc, resolve(join(siteDir, iconFilename)));
+    siteConfig.icon = iconFilename;
+  }
+
   // Render each section
   for (const section of sections) {
     const data = sectionData.get(section.id)!;
@@ -126,7 +154,7 @@ export async function renderSite(docsDir: string): Promise<string> {
     const depth = data.htmlPath.split("/").length - 1;
     const rootPath = depth > 0 ? "../".repeat(depth) : "./";
 
-    const fullHtml = template(data.title, htmlContent, nav, rootPath);
+    const fullHtml = template(data.title, htmlContent, nav, rootPath, siteConfig);
 
     const outPath = resolve(join(siteDir, data.htmlPath));
     await mkdir(dirname(outPath), { recursive: true });
@@ -226,9 +254,14 @@ function template(
   title: string,
   content: string,
   nav: NavEntry[],
-  rootPath: string
+  rootPath: string,
+  siteConfig: SiteConfig = {}
 ): string {
   const navHtml = renderNav(nav, rootPath);
+  const siteTitle = siteConfig.title ?? "API Docs";
+  const iconHtml = siteConfig.icon
+    ? `<img src="${rootPath}${escapeHtml(siteConfig.icon)}" alt="" class="logo-icon"> `
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -242,7 +275,7 @@ function template(
   <div class="layout">
     <nav class="sidebar">
       <div class="sidebar-header">
-        <a href="${rootPath}index.html" class="logo">API Docs</a>
+        <a href="${rootPath}index.html" class="logo">${iconHtml}${escapeHtml(siteTitle)}</a>
       </div>
       <ul>
           ${navHtml}
@@ -324,6 +357,14 @@ body {
   font-size: 1.1rem;
   color: var(--color-text);
   text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.logo-icon {
+  height: 24px;
+  width: auto;
 }
 
 .sidebar > ul {
@@ -521,6 +562,33 @@ article blockquote {
   padding: 0.5rem 1rem;
   margin-bottom: 1rem;
   color: var(--color-text-secondary);
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0d1117;
+    --color-sidebar-bg: #161b22;
+    --color-border: #30363d;
+    --color-text: #e6edf3;
+    --color-text-secondary: #8b949e;
+    --color-text-muted: #6e7681;
+    --color-toc-bg: #1c2028;
+    --color-link: #58a6ff;
+    --color-active: #58a6ff;
+    --color-active-bg: #1c2333;
+    --color-code-bg: #161b22;
+  }
+
+  article .shiki,
+  article .shiki span {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+  }
+
+  article .shiki {
+    background: var(--color-code-bg) !important;
+  }
 }
 
 /* Responsive */

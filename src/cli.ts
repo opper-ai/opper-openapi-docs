@@ -3,6 +3,8 @@ import { loadConfig } from "./config.js";
 import { generate } from "./generate.js";
 import { renderSite } from "./renderer.js";
 import { resolve, join } from "path";
+import { writeFile } from "fs/promises";
+import type { SiteConfig } from "./renderer.js";
 
 const program = new Command();
 
@@ -22,11 +24,20 @@ program
   .option("--model <model>", "LLM model to use")
   .option("--site", "Also generate a static site")
   .option("--force", "Force regenerate all sections (ignore cache)")
+  .option("--title <text>", "Site title for sidebar header")
+  .option("--icon <path>", "Path to icon file (SVG/PNG) for sidebar header")
   .action(async (options) => {
     try {
       const config = await loadConfig(options);
       await generate(config);
       if (config.site) {
+        const siteConfig: SiteConfig = {};
+        if (config.title) siteConfig.title = config.title;
+        if (config.icon) siteConfig.icon = resolve(config.icon);
+        await writeFile(
+          resolve(join(config.output, ".openapi-docs-site.json")),
+          JSON.stringify(siteConfig, null, 2) + "\n"
+        );
         await renderSite(resolve(config.output));
       }
     } catch (err) {
