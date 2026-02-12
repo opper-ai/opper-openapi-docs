@@ -29,7 +29,7 @@ npx opper-openapi-docs generate --spec ./openapi.yaml [options]
 | `--spec <path>` | Path to OpenAPI spec file | (required) |
 | `--output <dir>` | Output directory | `./docs` |
 | `--instructions <text>` | Custom tone/audience instructions | |
-| `--model <model>` | LLM model to use | |
+| `--model <model>` | LLM model to use | `anthropic/claude-sonnet-4.5` |
 | `--site` | Also generate a static HTML site | |
 | `--force` | Regenerate all sections (ignore cache) | |
 | `--title <text>` | Site title for sidebar header | `API Docs` |
@@ -108,7 +108,7 @@ jobs:
 | `spec` | Path to OpenAPI spec file | Yes | |
 | `output` | Output directory | No | `./docs` |
 | `instructions` | Custom documentation instructions | No | |
-| `model` | LLM model to use | No | |
+| `model` | LLM model to use | No | `anthropic/claude-sonnet-4.5` |
 | `site` | Generate static site | No | `true` |
 | `title` | Site title for sidebar header | No | `API Docs` |
 | `icon` | Path to icon file (SVG/PNG) for sidebar | No | |

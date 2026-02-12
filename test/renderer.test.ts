@@ -57,7 +57,7 @@ beforeAll(async () => {
     },
   });
 
-  await writeFile(join(TEST_DIR, "index.md"), "# Overview\n\nWelcome.\n\n```bash\ncurl https://api.example.com\n```\n");
+  await writeFile(join(TEST_DIR, "index.md"), "# Overview\n\nWelcome.\n\nSee [Authentication](authentication.md) and [Pets](endpoints/pets.md#list-pets).\n\n```bash\ncurl https://api.example.com\n```\n");
   await writeFile(join(TEST_DIR, "authentication.md"), "# Authentication\n\nUse Bearer tokens.\n");
   await writeFile(join(TEST_DIR, "endpoints/pets.md"), "# Pets\n\n## List Pets\n\n`GET /pets`\n\n## Create Pet\n\n`POST /pets`\n\n### Request Body\n\nJSON body.\n");
   await writeFile(join(TEST_DIR, "endpoints/stores.md"), "# Stores\n\n`GET /stores`\n");
@@ -161,8 +161,20 @@ describe("renderSite", () => {
     const siteDir = await renderSite(TEST_DIR);
     const indexHtml = await readFile(join(siteDir, "index.html"), "utf-8");
 
-    // The index page should not show the pets TOC
-    expect(indexHtml).not.toContain("#list-pets");
+    // The index page should not show the pets TOC in the sidebar nav
+    // (it may still contain #list-pets as a content link)
+    const sidebarMatch = indexHtml.match(/<nav class="sidebar">([\s\S]*?)<\/nav>/);
+    expect(sidebarMatch).toBeTruthy();
+    expect(sidebarMatch![1]).not.toContain("#list-pets");
+  });
+
+  it("rewrites .md links to .html in rendered output", async () => {
+    const siteDir = await renderSite(TEST_DIR);
+    const indexHtml = await readFile(join(siteDir, "index.html"), "utf-8");
+
+    expect(indexHtml).toContain('href="authentication.html"');
+    expect(indexHtml).toContain('href="endpoints/pets.html#list-pets"');
+    expect(indexHtml).not.toContain('href="authentication.md"');
   });
 
   it("shows default 'API Docs' title when no site config", async () => {

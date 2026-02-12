@@ -100,6 +100,11 @@ export async function renderSite(docsDir: string): Promise<string> {
         const slug = slugify(text.replace(/<[^>]*>/g, ""));
         return `<h${depth} id="${slug}">${text}</h${depth}>\n`;
       },
+      link({ href, text }) {
+        // Rewrite relative .md links to .html for the static site
+        const rewritten = href.replace(/\.md(#|$)/g, ".html$1");
+        return `<a href="${rewritten}">${text}</a>`;
+      },
       code({ text, lang }) {
         const language = lang || "text";
         try {
