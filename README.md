@@ -4,6 +4,8 @@ Generate rich API documentation from OpenAPI specs using AI agents.
 
 Unlike mechanical renderers (Swagger UI, Redoc), this tool uses AI agents to produce developer-friendly docs with narrative flow, code examples, and getting-started guides. Agents read the spec through tools, decide how to structure the docs, and write each section with full cross-referencing.
 
+[Live demo (Pet Store API)](https://opper-ai.github.io/opper-openapi-docs/)
+
 ## Quick Start
 
 ```bash

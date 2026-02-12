@@ -26,6 +26,7 @@ jobs:
         id: docs
         with:
           spec: ./test/fixtures/petstore.yaml
+          title: Pet Store
           opper-api-key: ${{ secrets.OPPER_API_KEY }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
