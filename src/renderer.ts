@@ -44,8 +44,8 @@ function slugify(text: string): string {
 
 function extractHeadings(markdown: string): Heading[] {
   const headings: Heading[] = [];
-  // Match ## and ### headings (not # which is the page title)
-  const regex = /^(#{2,3})\s+(.+)$/gm;
+  // Match ## headings only (not # page title or ### sub-sections)
+  const regex = /^(#{2,2})\s+(.+)$/gm;
   let match;
   while ((match = regex.exec(markdown)) !== null) {
     headings.push({
