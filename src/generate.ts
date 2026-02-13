@@ -25,7 +25,11 @@ export async function generate(config: Config): Promise<void> {
   await mkdir(outputDir, { recursive: true });
 
   // 2. Check if we can skip entirely
-  const specHash = sha256(JSON.stringify(specIndex));
+  const specHash = sha256(
+    JSON.stringify(specIndex, (_key, value) =>
+      value instanceof Map ? Array.from(value.entries()) : value
+    )
+  );
   const instructionsHash = sha256(config.instructions ?? "");
   const manifest = await readManifest(outputDir);
 
