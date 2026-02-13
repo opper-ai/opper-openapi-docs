@@ -133,11 +133,11 @@ describe("renderSite", () => {
     const siteDir = await renderSite(TEST_DIR);
     const petsHtml = await readFile(join(siteDir, "endpoints/pets.html"), "utf-8");
 
-    // Active page should have a TOC with h2/h3 headings
+    // Active page should have a TOC with h2 headings (h3 excluded)
     expect(petsHtml).toContain('class="toc"');
     expect(petsHtml).toContain("#list-pets");
     expect(petsHtml).toContain("#create-pet");
-    expect(petsHtml).toContain("#request-body");
+    expect(petsHtml).not.toContain("#request-body");
   });
 
   it("adds id attributes to headings for anchor links", async () => {
@@ -149,12 +149,12 @@ describe("renderSite", () => {
     expect(petsHtml).toContain('id="request-body"');
   });
 
-  it("indents h3 headings in TOC", async () => {
+  it("excludes h3 headings from TOC", async () => {
     const siteDir = await renderSite(TEST_DIR);
     const petsHtml = await readFile(join(siteDir, "endpoints/pets.html"), "utf-8");
 
-    // h3 headings should have the toc-h3 class
-    expect(petsHtml).toContain('toc-h3');
+    // h3 headings should not appear in the sidebar TOC
+    expect(petsHtml).not.toContain('toc-h3');
   });
 
   it("does not show TOC on non-active pages", async () => {
