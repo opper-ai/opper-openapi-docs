@@ -13,7 +13,7 @@ export interface Config {
 }
 
 const CONFIG_FILENAME = "opper-docs.config.json";
-const DEFAULT_MODEL = "openai/gpt-5.2";
+const DEFAULT_MODEL = "anthropic/claude-opus-4.5";
 
 export async function loadConfig(cliOptions: Partial<Config>): Promise<Config> {
   let fileConfig: Partial<Config> = {};
